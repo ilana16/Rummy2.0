@@ -1,6 +1,6 @@
 // Firebase configuration
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 
@@ -16,11 +16,25 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+console.log("Initializing Firebase with config:", JSON.stringify(firebaseConfig));
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const firestore = getFirestore(app);
 const database = getDatabase(app);
-const googleProvider = new GoogleAuthProvider();
 
-export { auth, firestore, database, googleProvider };
+// Enable more detailed error logging
+auth.useDeviceLanguage();
+
+// Log auth state changes for debugging
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    console.log("User signed in:", user.uid);
+    console.log("User email verified:", user.emailVerified);
+    console.log("User is anonymous:", user.isAnonymous);
+  } else {
+    console.log("User signed out");
+  }
+});
+
+export { auth, firestore, database };
 export default app;

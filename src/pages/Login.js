@@ -108,13 +108,15 @@ const ToggleLink = styled.button`
   }
 `;
 
-const ErrorMessage = styled.p`
+const ErrorMessage = styled.div`
   color: #d32f2f;
   margin-top: 15px;
   font-size: 14px;
   background-color: #ffebee;
-  padding: 8px;
+  padding: 12px;
   border-radius: 4px;
+  text-align: left;
+  word-break: break-word;
 `;
 
 const VerificationMessage = styled.p`
@@ -154,12 +156,27 @@ const Tab = styled.button`
   }
 `;
 
+const DebugInfo = styled.div`
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+  text-align: left;
+  word-break: break-word;
+  max-height: 100px;
+  overflow-y: auto;
+`;
+
 const Login = () => {
   const [activeTab, setActiveTab] = useState('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [verificationSent, setVerificationSent] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugInfo, setDebugInfo] = useState({});
   
   const { 
     currentUser, 
@@ -168,7 +185,8 @@ const Login = () => {
     signUpWithEmail,
     signInAnonymous,
     verifyEmail,
-    authError 
+    authError,
+    isRedirectResult
   } = useAuth();
   
   const navigate = useNavigate();
@@ -176,6 +194,18 @@ const Login = () => {
   useEffect(() => {
     // If user is already logged in and email is verified or anonymous, redirect to lobby
     if (currentUser) {
+      console.log("Current user in Login component:", currentUser);
+      setDebugInfo(prev => ({
+        ...prev,
+        currentUser: {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          emailVerified: currentUser.emailVerified,
+          isAnonymous: currentUser.isAnonymous,
+          providerData: currentUser.providerData
+        }
+      }));
+      
       if (currentUser.isAnonymous || currentUser.emailVerified) {
         navigate('/lobby');
       }
@@ -185,17 +215,46 @@ const Login = () => {
   useEffect(() => {
     // Set error from auth context if available
     if (authError) {
+      console.log("Auth error in Login component:", authError);
       setError(authError.message);
+      setDebugInfo(prev => ({
+        ...prev,
+        authError
+      }));
     }
   }, [authError]);
+
+  useEffect(() => {
+    // Check if we just completed a redirect sign-in
+    if (isRedirectResult) {
+      console.log("Redirect result detected in Login component");
+      setDebugInfo(prev => ({
+        ...prev,
+        isRedirectResult
+      }));
+    }
+  }, [isRedirectResult]);
 
   const handleGoogleSignIn = async () => {
     try {
       setError('');
+      console.log("Initiating Google sign in from Login component");
+      setDebugInfo(prev => ({
+        ...prev,
+        action: "Google sign in initiated"
+      }));
+      
       await signInWithGoogle();
     } catch (error) {
       // Error is handled in AuthContext and set via authError
-      console.error("Google sign in error:", error);
+      console.error("Google sign in error in Login component:", error);
+      setDebugInfo(prev => ({
+        ...prev,
+        googleSignInError: {
+          code: error.code,
+          message: error.message
+        }
+      }));
     }
   };
 
@@ -208,10 +267,24 @@ const Login = () => {
     
     try {
       setError('');
+      console.log("Initiating email sign in from Login component");
+      setDebugInfo(prev => ({
+        ...prev,
+        action: "Email sign in initiated",
+        email: email
+      }));
+      
       await signInWithEmail(email, password);
     } catch (error) {
       // Error is handled in AuthContext and set via authError
-      console.error("Email sign in error:", error);
+      console.error("Email sign in error in Login component:", error);
+      setDebugInfo(prev => ({
+        ...prev,
+        emailSignInError: {
+          code: error.code,
+          message: error.message
+        }
+      }));
     }
   };
 
@@ -229,32 +302,76 @@ const Login = () => {
     
     try {
       setError('');
+      console.log("Initiating email sign up from Login component");
+      setDebugInfo(prev => ({
+        ...prev,
+        action: "Email sign up initiated",
+        email: email
+      }));
+      
       await signUpWithEmail(email, password);
       setVerificationSent(true);
     } catch (error) {
       // Error is handled in AuthContext and set via authError
-      console.error("Email sign up error:", error);
+      console.error("Email sign up error in Login component:", error);
+      setDebugInfo(prev => ({
+        ...prev,
+        emailSignUpError: {
+          code: error.code,
+          message: error.message
+        }
+      }));
     }
   };
 
   const handleAnonymousSignIn = async () => {
     try {
       setError('');
+      console.log("Initiating anonymous sign in from Login component");
+      setDebugInfo(prev => ({
+        ...prev,
+        action: "Anonymous sign in initiated"
+      }));
+      
       await signInAnonymous();
     } catch (error) {
       // Error is handled in AuthContext and set via authError
-      console.error("Anonymous sign in error:", error);
+      console.error("Anonymous sign in error in Login component:", error);
+      setDebugInfo(prev => ({
+        ...prev,
+        anonymousSignInError: {
+          code: error.code,
+          message: error.message
+        }
+      }));
     }
   };
 
   const handleResendVerification = async () => {
     try {
+      console.log("Initiating email verification from Login component");
+      setDebugInfo(prev => ({
+        ...prev,
+        action: "Email verification initiated"
+      }));
+      
       await verifyEmail();
       setVerificationSent(true);
     } catch (error) {
       setError('Failed to send verification email. Please try again.');
-      console.error(error);
+      console.error("Email verification error in Login component:", error);
+      setDebugInfo(prev => ({
+        ...prev,
+        emailVerificationError: {
+          code: error.code,
+          message: error.message
+        }
+      }));
     }
+  };
+
+  const toggleDebugInfo = () => {
+    setShowDebug(!showDebug);
   };
 
   const renderSignInForm = () => (
@@ -354,7 +471,21 @@ const Login = () => {
               Play as Guest
             </Button>
             
-            {error && <ErrorMessage>{error}</ErrorMessage>}
+            {error && (
+              <ErrorMessage>
+                <strong>Error:</strong> {error}
+              </ErrorMessage>
+            )}
+            
+            <ToggleLink onClick={toggleDebugInfo}>
+              {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+            </ToggleLink>
+            
+            {showDebug && (
+              <DebugInfo>
+                <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+              </DebugInfo>
+            )}
           </>
         )}
       </LoginCard>
