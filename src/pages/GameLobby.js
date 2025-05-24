@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { useAuth } from '../context/AuthContext';
-import { getDatabase, ref, push, set, onValue, remove } from 'firebase/database';
+import { getDatabase, ref, push, set, onValue, query, orderByChild, equalTo, remove } from 'firebase/database';
 
 const LobbyContainer = styled.div`
   display: flex;
@@ -12,18 +12,18 @@ const LobbyContainer = styled.div`
 `;
 
 const Header = styled.header`
-  background-color: #4285F4;
-  color: white;
-  padding: 15px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 15px 20px;
+  background-color: #4285F4;
+  color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 `;
 
 const Logo = styled.h1`
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 1.5rem;
 `;
 
 const UserSection = styled.div`
@@ -31,67 +31,43 @@ const UserSection = styled.div`
   align-items: center;
 `;
 
-const Avatar = styled.div`
+const Username = styled.span`
+  margin-right: 10px;
+`;
+
+const Avatar = styled.img`
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background-image: url(${props => props.src});
-  background-size: cover;
-  background-position: center;
-  margin-right: 10px;
   cursor: pointer;
-`;
-
-const Username = styled.span`
-  margin-right: 15px;
-`;
-
-const Button = styled.button`
-  background-color: ${props => props.primary ? '#4285F4' : props.secondary ? '#4CAF50' : '#f44336'};
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: ${props => props.small ? '8px 12px' : '10px 20px'};
-  font-size: ${props => props.small ? '14px' : '16px'};
-  cursor: pointer;
-  margin: ${props => props.margin || '0'};
-  transition: background-color 0.3s;
-
-  &:hover {
-    background-color: ${props => props.primary ? '#3367D6' : props.secondary ? '#388E3C' : '#d32f2f'};
-  }
-
-  &:disabled {
-    background-color: #cccccc;
-    cursor: not-allowed;
-  }
 `;
 
 const Content = styled.main`
   flex: 1;
-  padding: 30px;
+  padding: 20px;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
 `;
 
-const TabContainer = styled.div`
-  display: flex;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #ddd;
-`;
-
-const Tab = styled.button`
-  background-color: ${props => props.active ? '#4285F4' : 'transparent'};
-  color: ${props => props.active ? 'white' : '#333'};
+const Button = styled.button`
+  background-color: ${props => props.primary ? '#4285F4' : props.secondary ? '#4CAF50' : '#f5f5f5'};
+  color: ${props => props.primary || props.secondary ? 'white' : '#333'};
   border: none;
-  padding: 12px 24px;
+  border-radius: 4px;
+  padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
   transition: background-color 0.3s;
-
+  
   &:hover {
-    background-color: ${props => props.active ? '#3367D6' : '#e0e0e0'};
+    background-color: ${props => props.primary ? '#3367D6' : props.secondary ? '#388E3C' : '#e0e0e0'};
+  }
+  
+  &:disabled {
+    background-color: #cccccc;
+    color: #666666;
+    cursor: not-allowed;
   }
 `;
 
@@ -105,8 +81,8 @@ const GamesList = styled.div`
 const GameCard = styled.div`
   background-color: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
 `;
@@ -124,10 +100,11 @@ const GameTitle = styled.h3`
 `;
 
 const GameCode = styled.span`
-  background-color: #f0f0f0;
-  padding: 4px 8px;
+  background-color: #f5f5f5;
+  padding: 5px 10px;
   border-radius: 4px;
   font-family: monospace;
+  font-weight: bold;
 `;
 
 const GameInfo = styled.div`
@@ -135,7 +112,7 @@ const GameInfo = styled.div`
 `;
 
 const PlayerCount = styled.div`
-  margin-bottom: 10px;
+  color: #666;
 `;
 
 const CreateGameModal = styled.div`
@@ -165,40 +142,6 @@ const ModalTitle = styled.h2`
   margin-bottom: 20px;
 `;
 
-const FormGroup = styled.div`
-  margin-bottom: 20px;
-`;
-
-const Label = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 16px;
-`;
-
-const RadioGroup = styled.div`
-  display: flex;
-  gap: 20px;
-  margin-top: 10px;
-`;
-
-const RadioLabel = styled.label`
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-`;
-
-const RadioInput = styled.input`
-  margin-right: 8px;
-`;
-
 const ModalActions = styled.div`
   display: flex;
   justify-content: flex-end;
@@ -206,44 +149,68 @@ const ModalActions = styled.div`
   margin-top: 30px;
 `;
 
+const NoGamesMessage = styled.div`
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 1.1rem;
+`;
+
+const RefreshButton = styled.button`
+  background: none;
+  border: none;
+  color: #4285F4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
 const GameLobby = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('public');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [gameCode, setGameCode] = useState('');
-  const [codeType, setCodeType] = useState('generate');
   const [games, setGames] = useState([]);
-  const [joinCode, setJoinCode] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(true);
   const database = getDatabase();
 
   useEffect(() => {
-    // Redirect to login if not authenticated or email not verified
+    // If no user is logged in, redirect to login
     if (!currentUser) {
       navigate('/');
-    } else if (!currentUser.emailVerified) {
-      navigate('/');
+      return;
     }
-  }, [currentUser, navigate]);
-
-  useEffect(() => {
-    // Listen for games in the database
-    const gamesRef = ref(database, 'games');
+    
+    // Load active games
+    const gamesRef = query(
+      ref(database, 'games'),
+      orderByChild('status'),
+      equalTo('waiting')
+    );
+    
     const unsubscribe = onValue(gamesRef, (snapshot) => {
       const gamesData = snapshot.val();
+      const gamesArray = [];
+      
       if (gamesData) {
-        const gamesArray = Object.entries(gamesData).map(([id, game]) => ({
-          id,
-          ...game
-        }));
-        setGames(gamesArray);
-      } else {
-        setGames([]);
+        Object.entries(gamesData).forEach(([id, game]) => {
+          gamesArray.push({
+            id,
+            ...game
+          });
+        });
       }
+      
+      setGames(gamesArray);
+      setLoading(false);
     });
-
+    
     return () => unsubscribe();
-  }, [database]);
+  }, [currentUser, database, navigate]);
 
   const handleProfileClick = () => {
     navigate('/profile');
@@ -255,194 +222,149 @@ const GameLobby = () => {
 
   const handleCloseModal = () => {
     setShowCreateModal(false);
-    setGameCode('');
-    setCodeType('generate');
   };
 
-  const generateRandomCode = () => {
-    const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed similar looking characters
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-      result += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return result;
-  };
-
-  const isCodeUnique = (code) => {
-    return !games.some(game => game.gameCode === code);
-  };
-
-  const handleSubmitGame = () => {
-    let finalGameCode;
-    
-    if (codeType === 'generate') {
-      // Generate a unique code
-      let newCode;
-      do {
-        newCode = generateRandomCode();
-      } while (!isCodeUnique(newCode));
-      finalGameCode = newCode;
-    } else {
-      // Use custom code if it's valid and unique
-      if (gameCode.length < 4) {
-        alert('Game code must be at least 4 characters');
-        return;
-      }
+  const handleSubmitGame = async () => {
+    try {
+      // Generate a 5-digit game code
+      const gameCode = generateGameCode();
       
-      if (!isCodeUnique(gameCode)) {
-        alert('This game code is already in use. Please choose another.');
-        return;
-      }
+      // Create the game in Firebase
+      const gamesRef = ref(database, 'games');
+      const newGameRef = push(gamesRef);
       
-      finalGameCode = gameCode.toUpperCase();
-    }
-    
-    // Create the game in Firebase
-    const gamesRef = ref(database, 'games');
-    const newGameRef = push(gamesRef);
-    
-    set(newGameRef, {
-      gameCode: finalGameCode,
-      hostId: currentUser.uid,
-      hostName: currentUser.displayName || 'Anonymous',
-      players: {
-        [currentUser.uid]: {
-          id: currentUser.uid,
-          name: currentUser.displayName || 'Anonymous',
-          photoURL: currentUser.photoURL || '',
-          isHost: true,
-          isReady: false
-        }
-      },
-      status: 'waiting',
-      createdAt: Date.now()
-    }).then(() => {
+      await set(newGameRef, {
+        gameCode: gameCode,
+        hostId: currentUser.uid,
+        hostName: currentUser.displayName || 'Anonymous',
+        players: {
+          [currentUser.uid]: {
+            id: currentUser.uid,
+            name: currentUser.displayName || 'Anonymous',
+            photoURL: currentUser.photoURL || '',
+            isHost: true,
+            isReady: false
+          }
+        },
+        status: 'waiting',
+        createdAt: Date.now()
+      });
+      
+      // Close modal and navigate to game room
       handleCloseModal();
       navigate(`/game/${newGameRef.key}`);
-    }).catch(error => {
+    } catch (error) {
       console.error('Error creating game:', error);
       alert('Failed to create game. Please try again.');
-    });
+    }
   };
 
   const handleJoinGame = (gameId) => {
-    // Add the current user to the game's players
-    const gamePlayerRef = ref(database, `games/${gameId}/players/${currentUser.uid}`);
-    
-    set(gamePlayerRef, {
-      id: currentUser.uid,
-      name: currentUser.displayName || 'Anonymous',
-      photoURL: currentUser.photoURL || '',
-      isHost: false,
-      isReady: false
-    }).then(() => {
-      navigate(`/game/${gameId}`);
-    }).catch(error => {
-      console.error('Error joining game:', error);
-      alert('Failed to join game. Please try again.');
-    });
+    navigate(`/game/${gameId}`);
   };
 
-  const handleJoinByCode = () => {
-    if (!joinCode) {
-      alert('Please enter a game code');
-      return;
-    }
+  const handleRefreshGames = () => {
+    setLoading(true);
+    const gamesRef = query(
+      ref(database, 'games'),
+      orderByChild('status'),
+      equalTo('waiting')
+    );
     
-    const game = games.find(g => g.gameCode === joinCode.toUpperCase());
-    
-    if (game) {
-      handleJoinGame(game.id);
-    } else {
-      alert('Game not found. Please check the code and try again.');
+    onValue(gamesRef, (snapshot) => {
+      const gamesData = snapshot.val();
+      const gamesArray = [];
+      
+      if (gamesData) {
+        Object.entries(gamesData).forEach(([id, game]) => {
+          gamesArray.push({
+            id,
+            ...game
+          });
+        });
+      }
+      
+      setGames(gamesArray);
+      setLoading(false);
+    }, { onlyOnce: true });
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
     }
   };
 
-  if (!currentUser) {
-    return null; // Will redirect via useEffect
-  }
+  // Generate a random 5-digit game code
+  const generateGameCode = () => {
+    return Math.floor(10000 + Math.random() * 90000).toString();
+  };
 
   return (
     <LobbyContainer>
       <Header>
         <Logo>Rummy Tile Game</Logo>
         <UserSection>
-          <Username>{currentUser.displayName || 'User'}</Username>
+          <Username>{currentUser?.displayName || 'Anonymous'}</Username>
           <Avatar 
-            src={currentUser.photoURL || 'https://via.placeholder.com/40'} 
+            src={currentUser?.photoURL || 'https://via.placeholder.com/40'} 
             onClick={handleProfileClick}
+            alt="Profile"
           />
         </UserSection>
       </Header>
       
       <Content>
-        <TabContainer>
-          <Tab 
-            active={activeTab === 'public'} 
-            onClick={() => setActiveTab('public')}
-          >
-            Public Games
-          </Tab>
-          <Tab 
-            active={activeTab === 'join'} 
-            onClick={() => setActiveTab('join')}
-          >
-            Join by Code
-          </Tab>
-        </TabContainer>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2>Game Lobby</h2>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <RefreshButton onClick={handleRefreshGames}>
+              ↻ Refresh Games
+            </RefreshButton>
+            <Button onClick={handleLogout}>Logout</Button>
+          </div>
+        </div>
         
-        <Button secondary onClick={handleCreateGame} margin="0 0 20px 0">
-          Create New Game
-        </Button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <Button primary onClick={handleCreateGame}>
+            Create New Game
+          </Button>
+        </div>
         
-        {activeTab === 'public' ? (
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>Loading games...</div>
+        ) : games.length > 0 ? (
           <GamesList>
-            {games
-              .filter(game => game.status === 'waiting')
-              .map(game => (
-                <GameCard key={game.id}>
-                  <GameHeader>
-                    <GameTitle>Host: {game.hostName}</GameTitle>
-                    <GameCode>{game.gameCode}</GameCode>
-                  </GameHeader>
-                  <GameInfo>
-                    <PlayerCount>
-                      Players: {Object.keys(game.players || {}).length}/4
-                    </PlayerCount>
-                  </GameInfo>
-                  <Button 
-                    primary 
-                    onClick={() => handleJoinGame(game.id)}
-                    disabled={Object.keys(game.players || {}).length >= 4 || 
-                             Object.keys(game.players || {}).includes(currentUser.uid)}
-                  >
-                    {Object.keys(game.players || {}).includes(currentUser.uid) 
-                      ? 'Rejoin Game' 
-                      : 'Join Game'}
-                  </Button>
-                </GameCard>
-              ))}
-            {games.filter(game => game.status === 'waiting').length === 0 && (
-              <p>No active games found. Create a new game to start playing!</p>
-            )}
+            {games.map(game => (
+              <GameCard key={game.id}>
+                <GameHeader>
+                  <GameTitle>Host: {game.hostName}</GameTitle>
+                  <GameCode>{game.gameCode}</GameCode>
+                </GameHeader>
+                <GameInfo>
+                  <PlayerCount>
+                    Players: {Object.keys(game.players || {}).length}/4
+                  </PlayerCount>
+                </GameInfo>
+                <Button 
+                  primary 
+                  onClick={() => handleJoinGame(game.id)}
+                  disabled={Object.keys(game.players || {}).length >= 4}
+                >
+                  {Object.keys(game.players || {}).includes(currentUser.uid) 
+                    ? 'Rejoin Game' 
+                    : 'Join Game'}
+                </Button>
+              </GameCard>
+            ))}
           </GamesList>
         ) : (
-          <div>
-            <FormGroup>
-              <Label>Enter Game Code:</Label>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <Input 
-                  type="text" 
-                  value={joinCode} 
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="Enter 6-character code"
-                />
-                <Button primary onClick={handleJoinByCode}>
-                  Join
-                </Button>
-              </div>
-            </FormGroup>
-          </div>
+          <NoGamesMessage>
+            No active games found. Create a new game to start playing!
+          </NoGamesMessage>
         )}
       </Content>
       
@@ -450,45 +372,8 @@ const GameLobby = () => {
         <CreateGameModal>
           <ModalContent>
             <ModalTitle>Create New Game</ModalTitle>
-            
-            <FormGroup>
-              <Label>Game Code:</Label>
-              <RadioGroup>
-                <RadioLabel>
-                  <RadioInput 
-                    type="radio" 
-                    name="codeType" 
-                    value="generate" 
-                    checked={codeType === 'generate'} 
-                    onChange={() => setCodeType('generate')}
-                  />
-                  Generate Random Code
-                </RadioLabel>
-                <RadioLabel>
-                  <RadioInput 
-                    type="radio" 
-                    name="codeType" 
-                    value="custom" 
-                    checked={codeType === 'custom'} 
-                    onChange={() => setCodeType('custom')}
-                  />
-                  Custom Code
-                </RadioLabel>
-              </RadioGroup>
-            </FormGroup>
-            
-            {codeType === 'custom' && (
-              <FormGroup>
-                <Label>Enter Custom Code (min 4 characters):</Label>
-                <Input 
-                  type="text" 
-                  value={gameCode} 
-                  onChange={(e) => setGameCode(e.target.value)}
-                  placeholder="Enter custom code"
-                  minLength={4}
-                />
-              </FormGroup>
-            )}
+            <p>A random 5-digit game code will be generated for your game.</p>
+            <p>Other players can join using this code or from the public games list.</p>
             
             <ModalActions>
               <Button onClick={handleCloseModal}>Cancel</Button>
